@@ -27,6 +27,9 @@ jobs:
   test-unit:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
     env:
       TEST_ENV: staging
     steps:
