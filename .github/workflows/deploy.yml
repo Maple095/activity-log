@@ -15,7 +15,6 @@ jobs:
 
       - name: Build & Package Artifact
         run: |
-          # 將專案內容壓縮打包成 build.zip（排除 .git 與 .github 目錄）
           zip -r build.zip . -x ".git/*" ".github/*"
 
       - name: Upload Build Artifact
@@ -24,8 +23,8 @@ jobs:
           name: build-artifact
           path: build.zip
 
-  # 2. 自動化測試關卡
-  test:
+  # 2. 單元測試階段 (Grade E - Test 1)
+  test-unit:
     needs: build
     runs-on: ubuntu-latest
     env:
@@ -39,25 +38,37 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Run Unit Tests
         run: |
-          if [ -f package.json ]; then
-            npm install || true
-          fi
+          npm run test:unit
 
-      - name: Download Build Artifact
+  # 3. 整合測試階段 (Grade E - Test 2)
+  test-integration:
+    needs: test-unit
+    runs-on: ubuntu-latest
+    env:
+      TEST_ENV: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
           name: build-artifact
 
-      - name: Run Automated Tests
+      - name: Run Integration Tests
         run: |
-          echo "Running automated tests in TEST_ENV=$TEST_ENV..."
-          npm test || (echo "Tests failed!" && exit 1)
+          npm run test:integration
 
-  # 3. 部署到 Staging 環境（依賴改為 needs: test）
+  # 4. 部署到 Staging 環境（依賴 test-integration）
   deploy-staging:
-    needs: test
+    needs: test-integration
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -75,7 +86,6 @@ jobs:
           TAG: ${{ vars.BUILD_TAG }}
           NOTE: ${{ vars.RELEASE_NOTE }}
         run: |
-          # 檢查標籤是否已存在，不存在則建立 Release，已存在則上傳更新檔案
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists, uploading artifact..."
             gh release upload "$TAG" build.zip --clobber
@@ -83,7 +93,7 @@ jobs:
             gh release create "$TAG" build.zip --title "Staging Release ($TAG)" --notes "$NOTE"
           fi
 
-  # 4. 部署到 Production 環境（受審查規則保護，依賴 staging）
+  # 5. 部署到 Production 環境（受審查規則保護）
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
