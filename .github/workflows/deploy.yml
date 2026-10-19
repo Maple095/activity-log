@@ -24,9 +24,40 @@ jobs:
           name: build-artifact
           path: build.zip
 
-  # 2. 部署到 Staging 環境
-  deploy-staging:
+  # 2. 自動化測試關卡
+  test:
     needs: build
+    runs-on: ubuntu-latest
+    env:
+      TEST_ENV: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm install || true
+          fi
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Run Automated Tests
+        run: |
+          echo "Running automated tests in TEST_ENV=$TEST_ENV..."
+          npm test || (echo "Tests failed!" && exit 1)
+
+  # 3. 部署到 Staging 環境（依賴改為 needs: test）
+  deploy-staging:
+    needs: test
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -52,7 +83,7 @@ jobs:
             gh release create "$TAG" build.zip --title "Staging Release ($TAG)" --notes "$NOTE"
           fi
 
-  # 3. 部署到 Production 環境（受審查規則保護）
+  # 4. 部署到 Production 環境（受審查規則保護，依賴 staging）
   deploy-production:
     needs: deploy-staging
     runs-on: ubuntu-latest
