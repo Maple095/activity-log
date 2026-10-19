@@ -5,3 +5,4 @@ console.log(`[Integration Test] Running in environment: ${process.env.TEST_ENV |
 const status = 'READY';
 assert.strictEqual(status, 'READY');
 console.log('✓ Integration tests passed successfully.');
+process.exit(0);
